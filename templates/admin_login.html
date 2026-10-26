@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="theme-color" content="#070b16">
+    <meta name="description" content="IDentrix administrator login portal for campus identity and detection management.">
+
+    <title>Admin Login | IDentrix</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* =========================================
+            IDENTRIX — DESIGN SYSTEM
+            Dark navy / electric blue / glass
+        ========================================= */
+
+        :root {
+            color-scheme: dark;
+
+            --bg: #070b16;
+            --bg-soft: #0b1222;
+            --surface: rgba(15, 25, 45, 0.78);
+            --surface-solid: #101b30;
+            --surface-light: rgba(28, 43, 68, 0.65);
+
+            --blue: #63a8ff;
+            --blue-bright: #83c0ff;
+            --blue-dark: #2477e8;
+            --cyan: #73e0ff;
+            --danger: #ff778b;
+
+            --text: #f3f7ff;
+            --text-soft: #c0cce0;
+            --muted: #8796af;
+
+            --border: rgba(153, 187, 232, 0.18);
+            --border-bright: rgba(111, 177, 255, 0.42);
+
+            --shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+            --radius-lg: 26px;
+            --radius-md: 18px;
+            --radius-sm: 12px;
+
+            --container: 1160px;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "DM Sans", sans-serif;
+            line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -3;
+            background-image:
+                linear-gradient(
+                    180deg,
+                    rgba(5, 9, 20, 0.77) 0%,
+                    rgba(5, 9, 20, 0.89) 48%,
+                    #070b16 100%
+                ),
+                url("https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=2200&q=85");
+            background-position: center, center;
+            background-size: cover;
+            background-repeat: no-repeat;
+            filter: saturate(0.55);
+            transform: scale(1.025);
+        }
+
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            pointer-events: none;
+            background:
+                radial-gradient(
+                    ellipse at 78% 16%,
+                    rgba(36, 119, 232, 0.16),
+                    transparent 38%
+                ),
+                radial-gradient(
+                    ellipse at 10% 45%,
+                    rgba(37, 95, 185, 0.11),
+                    transparent 34%
+                );
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        button,
+        input {
+            font: inherit;
+        }
+
+        button:focus-visible,
+        input:focus-visible,
+        a:focus-visible {
+            outline: 2px solid var(--cyan);
+            outline-offset: 4px;
+        }
+
+        .container {
+            width: min(var(--container), calc(100% - 48px));
+            margin-inline: auto;
+        }
+
+        /* =========================================
+            NAVIGATION
+        ========================================= */
+
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid rgba(153, 187, 232, 0.12);
+            background: rgba(7, 11, 22, 0.78);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+        }
+
+        .nav-inner {
+            min-height: 82px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 28px;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .brand-logo {
+            width: 43px;
+            height: 43px;
+            object-fit: contain;
+        }
+
+        .brand-copy {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.15;
+        }
+
+        .brand-name {
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.065em;
+        }
+
+        .brand-name span {
+            color: var(--blue-bright);
+        }
+
+        .brand-caption {
+            margin-top: 5px;
+            color: var(--muted);
+            font-size: 0.58rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+        }
+
+        .nav-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+        }
+
+        .nav-link {
+            position: relative;
+            padding-block: 8px;
+            color: var(--muted);
+            font-size: 0.87rem;
+            font-weight: 500;
+            transition: color 180ms ease;
+        }
+
+        .nav-link:hover {
+            color: var(--text);
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn {
+            min-height: 45px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            padding: 11px 18px;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #6eb4ff, #327fe9);
+            color: #07101f;
+            font-size: 0.86rem;
+            font-weight: 700;
+            line-height: 1.2;
+            white-space: nowrap;
+            box-shadow: 0 8px 28px rgba(50, 127, 233, 0.18);
+            transition: transform 180ms ease, box-shadow 180ms ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(50, 127, 233, 0.3);
+        }
+
+        .btn-outline {
+            border-color: var(--border-bright);
+            background: rgba(12, 22, 40, 0.6);
+            color: var(--text);
+            box-shadow: none;
+        }
+
+        .btn-outline:hover {
+            border-color: var(--blue);
+            background: rgba(53, 112, 190, 0.14);
+        }
+
+        /* =========================================
+            MAIN LOGIN SECTION
+        ========================================= */
+
+        main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 24px;
+        }
+
+        .login-card {
+            position: relative;
+            width: 100%;
+            max-width: 440px;
+            overflow: hidden;
+            padding: 42px;
+            border: 1px solid rgba(131, 192, 255, 0.28);
+            border-radius: var(--radius-lg);
+            background: linear-gradient(
+                145deg,
+                rgba(24, 41, 67, 0.9),
+                rgba(9, 17, 32, 0.86)
+            );
+            box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+        }
+
+        .login-card::before {
+            content: "";
+            position: absolute;
+            top: -110px;
+            right: -80px;
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            background: rgba(64, 146, 255, 0.14);
+            filter: blur(55px);
+            pointer-events: none;
+        }
+
+        .admin-icon {
+            width: 54px;
+            height: 54px;
+            margin-bottom: 22px;
+            display: grid;
+            place-items: center;
+            border: 1px solid rgba(111, 177, 255, 0.28);
+            border-radius: 16px;
+            background: linear-gradient(
+                145deg,
+                rgba(99, 168, 255, 0.16),
+                rgba(99, 168, 255, 0.035)
+            );
+            color: var(--blue-bright);
+            box-shadow: 0 8px 24px rgba(50, 127, 233, 0.15);
+        }
+        .admin-icon svg {
+            width: 26px;
+            height: 26px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .login-card h1 {
+            margin: 0 0 8px;
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 1.85rem;
+            font-weight: 600;
+            letter-spacing: -0.045em;
+        }
+
+        .login-subtitle {
+            margin: 0 0 28px;
+            color: var(--text-soft);
+            font-size: 0.92rem;
+            line-height: 1.65;
+        }
+
+        .form-group {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 7px;
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 0.84rem;
+            font-weight: 600;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .form-group input {
+            width: 100%;
+            height: 49px;
+            padding: 0 45px 0 16px;
+            border: 1px solid rgba(131, 192, 255, 0.22);
+            border-radius: 13px;
+            background: rgba(5, 12, 24, 0.52);
+            color: var(--text);
+            font-size: 0.92rem;
+            transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+        }
+
+        .form-group input::placeholder {
+            color: var(--muted);
+            opacity: 0.7;
+        }
+
+        .form-group input:focus {
+            border-color: var(--blue-bright);
+            background: rgba(12, 23, 41, 0.75);
+            box-shadow: 0 0 0 4px rgba(99, 168, 255, 0.15);
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 14px;
+            background: none;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            padding: 0;
+            transition: color 180ms ease;
+        }
+        .toggle-password svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .toggle-password:hover {
+            color: var(--blue-bright);
+        }
+
+        .error {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 22px;
+            padding: 13px 16px;
+            border: 1px solid rgba(255, 119, 139, 0.32);
+            border-radius: 12px;
+            background: rgba(255, 119, 139, 0.1);
+            color: var(--danger);
+            font-size: 0.84rem;
+            font-weight: 500;
+        }
+
+        .login-button {
+            width: 100%;
+            min-height: 48px;
+            margin-top: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            padding: 12px 20px;
+            border: 1px solid transparent;
+            border-radius: 13px;
+            background: linear-gradient(135deg, #6eb4ff, #327fe9);
+            color: #07101f;
+            font-family: "DM Sans", sans-serif;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(50, 127, 233, 0.22);
+            transition: transform 180ms ease, box-shadow 180ms ease;
+        }
+
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 36px rgba(50, 127, 233, 0.34);
+        }
+
+        /* =========================================
+            FOOTER
+        ========================================= */
+
+        .footer {
+            border-top: 1px solid var(--border);
+            background: rgba(5, 9, 18, 0.72);
+        }
+
+        .footer-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 30px;
+            padding-block: 30px;
+        }
+
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+        }
+
+        .footer-brand img {
+            width: 34px;
+            height: 34px;
+            object-fit: contain;
+        }
+
+        .footer-brand strong {
+            display: block;
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 1rem;
+        }
+
+        .footer-brand span {
+            display: block;
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: 0.7rem;
+        }
+
+        .footer-links {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 22px;
+        }
+
+        .footer-links a {
+            color: var(--muted);
+            font-size: 0.79rem;
+            transition: color 180ms ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--blue-bright);
+        }
+
+        .footer-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding-block: 17px;
+            border-top: 1px solid rgba(153, 187, 232, 0.1);
+            color: var(--muted);
+            font-size: 0.72rem;
+        }
+
+        .footer-bottom p {
+            margin: 0;
+        }
+
+        .footer-bottom span {
+            color: var(--text-soft);
+        }
+
+        @media (max-width: 600px) {
+            .login-card {
+                padding: 28px 22px;
+                border-radius: 21px;
+            }
+            .login-card h1 {
+                font-size: 1.6rem;
+            }
+            .footer-main {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .footer-bottom {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 7px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- =========================================
+         NAVIGATION HEADER
+    ========================================== -->
+
+    <header class="navbar">
+        <div class="container nav-inner">
+
+            <a href="{{ url_for('home') }}" class="brand" aria-label="IDentrix home">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', filename='identrix-logo.svg') }}"
+                    alt=""
+                >
+                <span class="brand-copy">
+                    <span class="brand-name">ID<span>entrix</span></span>
+                    <span class="brand-caption">CAMPUS IDENTITY SYSTEM</span>
+                </span>
+            </a>
+
+            <nav class="nav-center" aria-label="Main navigation">
+                <a class="nav-link" href="{{ url_for('home') }}">Home</a>
+                <a class="nav-link" href="{{ url_for('detect') }}">Detection</a>
+            </nav>
+
+            <div class="nav-right">
+                <a class="btn btn-outline" href="{{ url_for('home') }}">
+                    ← Back to Home
+                </a>
+            </div>
+
+        </div>
+    </header>
+
+
+    <!-- =========================================
+         MAIN LOGIN CONTAINER
+    ========================================== -->
+
+    <main>
+        <div class="login-card">
+
+            <div class="admin-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+            </div>
+
+            <h1>
+                Admin Login
+            </h1>
+
+            <p class="login-subtitle">
+                Access the IDentrix monitoring dashboard and management system.
+            </p>
+
+            {% if error %}
+            <div class="error" role="alert">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="POST">
+
+                <div class="form-group">
+                    <label for="username">
+                        Username
+                    </label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        placeholder="Enter admin username"
+                        required
+                        autocomplete="username"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password">
+                        Password
+                    </label>
+                    <div class="input-wrapper">
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="Enter admin password"
+                            required
+                            autocomplete="current-password"
+                        >
+                        <button type="button" class="toggle-password" id="togglePasswordBtn" aria-label="Show password" onclick="togglePasswordVisibility()">
+                            <!-- Eye icon (Show) -->
+                            <svg id="eyeIcon" viewBox="0 0 24 24">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <button
+                    type="submit"
+                    class="login-button"
+                >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg> Login to Dashboard
+                </button>
+
+            </form>
+
+        </div>
+    </main>
+
+
+    <!-- =========================================
+         FOOTER
+    ========================================== -->
+
+    <footer class="footer">
+        <div class="container">
+
+            <div class="footer-main">
+
+                <a href="{{ url_for('home') }}" class="footer-brand" aria-label="IDentrix home">
+                    <img
+                        src="{{ url_for('static', filename='identrix-logo.svg') }}"
+                        alt=""
+                    >
+                    <div>
+                        <strong>IDentrix</strong>
+                        <span>Campus identity intelligence</span>
+                    </div>
+                </a>
+
+                <nav class="footer-links" aria-label="Footer navigation">
+                    <a href="{{ url_for('home') }}">Home</a>
+                    <a href="{{ url_for('detect') }}">Detection</a>
+                    <a href="{{ url_for('admin_login') }}">Admin</a>
+                </nav>
+
+            </div>
+
+            <div class="footer-bottom">
+                <p>
+                    © <span id="currentYear">2026</span> IDentrix.
+                    Student ID-card detection and result review.
+                </p>
+
+                <p>Designed for <span>smarter campus workflows.</span></p>
+            </div>
+
+        </div>
+    </footer>
+
+    <script>
+        document.getElementById("currentYear").textContent = new Date().getFullYear();
+
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById("password");
+            const toggleBtn = document.getElementById("togglePasswordBtn");
+
+            if (passwordInput.type === "password") {
+                passwordInput.type = "text";
+                // Switch to eye-off icon (Hide)
+                toggleBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>
+                `;
+                toggleBtn.setAttribute("aria-label", "Hide password");
+            } else {
+                passwordInput.type = "password";
+                // Switch back to eye icon (Show)
+                toggleBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                `;
+                toggleBtn.setAttribute("aria-label", "Show password");
+            }
+        }
+    </script>
+
+</body>
+</html>

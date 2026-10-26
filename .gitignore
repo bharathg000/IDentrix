@@ -9,3 +9,6 @@ runs/
 
 .env
 .DS_Store
+
+!idcard_v2.pt
+!yolo11n.pt

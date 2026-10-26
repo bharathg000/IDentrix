@@ -14,4 +14,3 @@ An AI-based computer vision system that detects hairstyle and ID card compliance
 - PyTorch
 - Flask
 - SQLite
-

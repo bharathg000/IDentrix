@@ -1,29 +1,18 @@
-def check_compliance(
-    id_card,
-    shirt_tucked,
-    formal_trousers,
-    formal_shoes,
-    hair_ok,
-    beard_ok
-):
+
+def check_compliance(id_card):
     rules = {
-        "ID Card": id_card,
-        "Shirt Tucked": shirt_tucked,
-        "Formal Trousers": formal_trousers,
-        "Formal Shoes": formal_shoes,
-        "Hair": hair_ok,
-        "Beard": beard_ok
+        "ID Card": bool(id_card)
     }
 
-    issues = []
+    issues = [
+        rule
+        for rule, status in rules.items()
+        if not status
+    ]
 
-    for rule, status in rules.items():
-        if not status:
-            issues.append(rule)
-
-    if len(issues) == 0:
-        result = "COMPLIANT"
-    else:
+    if issues:
         result = "NOT COMPLIANT"
+    else:
+        result = "COMPLIANT"
 
     return result, rules, issues

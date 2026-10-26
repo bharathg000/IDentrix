@@ -1,275 +1,388 @@
-```html
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#070b16">
+    <meta name="description" content="IDentrix live AI-assisted student ID-card detection stream.">
+    <title>Live Detection | IDentrix</title>
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
-
-    <title>Detection | CampusAppearanceAI</title>
-
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-
-        .camera-box {
-            width: 100%;
-            overflow: hidden;
-            border-radius: 12px;
-            margin-bottom: 20px;
+        :root {
+            color-scheme: dark;
+            --bg: #070b16;
+            --surface: rgba(15, 25, 45, 0.78);
+            --surface-solid: #101b30;
+            --blue: #63a8ff;
+            --blue-bright: #83c0ff;
+            --cyan: #73e0ff;
+            --success: #69d5a0;
+            --danger: #ff778b;
+            --text: #f3f7ff;
+            --text-soft: #c0cce0;
+            --muted: #8796af;
+            --border: rgba(153, 187, 232, 0.18);
+            --border-bright: rgba(111, 177, 255, 0.42);
+            --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+            --radius-lg: 26px;
+            --radius-md: 18px;
+            --radius-sm: 12px;
         }
 
-        .camera-box img {
-            width: 100%;
-            max-width: 640px;
-            height: auto;
-            display: block;
-            margin: auto;
-            border-radius: 12px;
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+            font-family: "DM Sans", sans-serif; overflow-x: hidden; display: flex; flex-direction: column;
         }
 
-        .checklist {
-            text-align: left;
-            margin-top: 25px;
+        body::before {
+            content: ""; position: fixed; inset: 0; z-index: -3;
+            background-image: linear-gradient(180deg, rgba(5, 9, 20, 0.77) 0%, rgba(5, 9, 20, 0.89) 48%, #070b16 100%),
+                url("https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=2200&q=85");
+            background-position: center; background-size: cover; filter: saturate(0.55);
         }
 
-        .check-item {
+        /* Navbar Header */
+        .navbar {
+            position: sticky; top: 0; z-index: 100;
+            border-bottom: 1px solid rgba(153, 187, 232, 0.12);
+            background: rgba(7, 11, 22, 0.78);
+            backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+        }
+        .container { width: min(1160px, calc(100% - 48px)); margin-inline: auto; }
+        .nav-inner { min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
+        .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
+        .brand-logo { width: 43px; height: 43px; object-fit: contain; }
+        .brand-copy { display: flex; flex-direction: column; line-height: 1.15; }
+        .brand-name { font-family: "Space Grotesk", sans-serif; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.065em; }
+        .brand-name span { color: var(--blue-bright); }
+        .brand-caption { margin-top: 5px; color: var(--muted); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.15em; }
+        
+        .nav-center { display: flex; align-items: center; gap: 30px; }
+        .nav-link { color: var(--muted); font-size: 0.87rem; font-weight: 500; transition: color 180ms ease; text-decoration: none; }
+        .nav-link:hover, .nav-link.active { color: var(--text); }
+
+        .btn {
+            min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 10px 18px; border: 1px solid transparent; border-radius: 12px;
+            background: linear-gradient(135deg, #6eb4ff, #327fe9); color: #07101f; font-size: 0.84rem; font-weight: 700;
+            box-shadow: 0 6px 24px rgba(50, 127, 233, 0.2); transition: transform 180ms ease; cursor: pointer; text-decoration: none;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-outline { border-color: var(--border-bright); background: rgba(12, 22, 40, 0.6); color: var(--text); box-shadow: none; }
+
+        .detect-hero {
+            text-align: center; padding: 40px 20px 20px; max-width: 800px; margin: 0 auto;
+        }
+        .detect-hero h1 {
+            font-family: "Space Grotesk", sans-serif; font-size: clamp(2rem, 4vw, 2.8rem); margin: 0 0 10px; font-weight: 700;
+        }
+        .detect-hero p {
+            color: var(--text-soft); font-size: 0.95rem; line-height: 1.6; margin: 0;
+        }
+
+        .detection-layout {
+            display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 24px; max-width: 1160px; margin: 20px auto 50px; padding: 0 24px; width: 100%; flex: 1;
+        }
+
+        .panel {
+            background: linear-gradient(145deg, rgba(24, 41, 67, 0.85), rgba(9, 17, 32, 0.82));
+            border: 1px solid var(--border-bright); border-radius: var(--radius-lg); padding: 28px;
+            backdrop-filter: blur(24px); box-shadow: var(--shadow); position: relative; overflow: hidden;
+        }
+
+        .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .panel-title { font-family: "Space Grotesk", sans-serif; font-size: 1.15rem; font-weight: 600; margin: 0; }
+        .panel-subtitle { color: var(--muted); font-size: 0.78rem; margin: 2px 0 0; }
+
+        .live-badge {
+            display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px;
+            background: rgba(105, 213, 160, 0.12); color: var(--success); font-size: 0.72rem; font-weight: 700; border: 1px solid rgba(105, 213, 160, 0.3);
+        }
+        .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+        .video-container {
+            position: relative; width: 100%; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-bright); background: #000;
+        }
+        .video-feed { width: 100%; display: block; aspect-ratio: 4/3; object-fit: cover; }
+
+        .scan-overlay {
+            position: absolute; inset: 0; pointer-events: none; border: 2px solid rgba(99, 168, 255, 0.2); border-radius: var(--radius-md);
+        }
+        .laser-beam {
+            position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+            box-shadow: 0 0 15px var(--cyan); animation: scanMotion 3s ease-in-out infinite alternate;
+        }
+        @keyframes scanMotion { 0% { top: 5%; } 100% { top: 95%; } }
+
+        .report-box {
+            background: rgba(10, 18, 32, 0.65); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px; text-align: center; margin-bottom: 20px;
+        }
+        .report-status { font-family: "Space Grotesk", sans-serif; font-size: 1.25rem; font-weight: 600; margin-bottom: 6px; }
+        .report-desc { color: var(--muted); font-size: 0.85rem; line-height: 1.5; margin: 0; }
+
+        .rules-section-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 10px; }
+        .rules-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+        .rule-item {
+            display: flex; align-items: center; justify-content: space-between; padding: 14px 18px;
+            background: rgba(15, 25, 45, 0.6); border: 1px solid var(--border); border-radius: 12px; font-size: 0.86rem;
+        }
+        .rule-badge { padding: 4px 10px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; }
+        .rule-badge.ok { background: rgba(105, 213, 160, 0.15); color: var(--success); border: 1px solid rgba(105, 213, 160, 0.3); }
+        .rule-badge.pending { background: rgba(111, 177, 255, 0.15); color: var(--blue-bright); border: 1px solid rgba(111, 177, 255, 0.3); }
+        .rule-badge.alert { background: rgba(255, 119, 139, 0.15); color: var(--danger); border: 1px solid rgba(255, 119, 139, 0.3); }
+
+        .info-note {
+            display: flex; align-items: flex-start; gap: 10px; padding: 14px; border-radius: 12px;
+            background: rgba(99, 168, 255, 0.08); border: 1px solid var(--border); color: var(--text-soft); font-size: 0.79rem; line-height: 1.6;
+        }
+        .info-note svg { flex-shrink: 0; margin-top: 2px; color: var(--blue-bright); }
+
+        /* Footer Styling */
+        .footer {
+            border-top: 1px solid var(--border);
+            background: rgba(5, 9, 18, 0.72);
+            margin-top: auto;
+        }
+        .footer-main {
             display: flex;
             align-items: center;
-            gap: 12px;
-            background-color: #f8fafc;
-            padding: 14px;
-            margin: 10px 0;
-            border-radius: 8px;
-            font-size: 16px;
+            justify-content: space-between;
+            gap: 30px;
+            padding-block: 30px;
         }
-
-        .check-item input {
-            width: 18px;
-            height: 18px;
-            flex-shrink: 0;
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            text-decoration: none;
+            color: var(--text);
         }
-
-        .button-group {
-            margin-top: 25px;
+        .footer-brand img {
+            width: 34px;
+            height: 34px;
+            object-fit: contain;
         }
-
-        .button-group button {
-            margin: 5px;
+        .footer-brand strong {
+            display: block;
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 1rem;
         }
+        .footer-brand span {
+            display: block;
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: 0.7rem;
+        }
+        .footer-links {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 22px;
+        }
+        .footer-links a {
+            color: var(--muted);
+            font-size: 0.79rem;
+            text-decoration: none;
+            transition: color 180ms ease;
+        }
+        .footer-links a:hover {
+            color: var(--blue-bright);
+        }
+        .footer-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding-block: 17px;
+            border-top: 1px solid rgba(153, 187, 232, 0.1);
+            color: var(--muted);
+            font-size: 0.72rem;
+        }
+        .footer-bottom p { margin: 0; }
+        .footer-bottom span { color: var(--text-soft); }
 
+        @media(max-width: 900px) {
+            .detection-layout { grid-template-columns: 1fr; }
+            .footer-main { flex-direction: column; align-items: flex-start; }
+            .footer-bottom { flex-direction: column; align-items: flex-start; gap: 7px; }
+        }
     </style>
-
 </head>
-
-
 <body>
 
-    <div class="container">
+    <header class="navbar">
+        <div class="container nav-inner">
+            <a href="/" class="brand" aria-label="IDentrix home">
+                <img class="brand-logo" src="{{ url_for('static', filename='identrix-logo.svg') }}" alt="">
+                <span class="brand-copy">
+                    <span class="brand-name">ID<span>entrix</span></span>
+                    <span class="brand-caption">CAMPUS IDENTITY SYSTEM</span>
+                </span>
+            </a>
 
-        <h1>Appearance Detection</h1>
+            <nav class="nav-center" aria-label="Main navigation">
+                <a class="nav-link" href="{{ url_for('home') }}">Home</a>
+                <a class="nav-link active" href="{{ url_for('detect') }}">Live Detection</a>
+            </nav>
 
-        <p class="subtitle">
-            Campus appearance compliance checking system
-        </p>
-
-
-        <div class="card">
-
-            <h2>📷 Camera Detection</h2>
-
-            <p>
-                Position yourself clearly in front of the camera.
-            </p>
-
-
-            <!-- ============================= -->
-            <!-- CAMERA -->
-            <!-- ============================= -->
-
-            <div class="camera-box">
-
-                <img
-                    src="{{ url_for('video') }}"
-                    alt="Live Camera Feed"
-                >
-
+            <div class="nav-right">
+                <a class="btn btn-outline" href="{{ url_for('home') }}">← Back to Home</a>
             </div>
-
-
-            <!-- ============================= -->
-            <!-- CHECKLIST -->
-            <!-- ============================= -->
-
-            <div class="checklist">
-
-                <h3>Appearance Checklist</h3>
-
-
-                <label class="check-item">
-
-                    <input
-                        type="checkbox"
-                        id="shirt"
-                        checked
-                    >
-
-                    Formal shirt is worn and properly tucked
-
-                </label>
-
-
-                <label class="check-item">
-
-                    <input
-                        type="checkbox"
-                        id="trousers"
-                        checked
-                    >
-
-                    Formal trousers are worn
-
-                </label>
-
-
-                <label class="check-item">
-
-                    <input
-                        type="checkbox"
-                        id="shoes"
-                        checked
-                    >
-
-                    Formal shoes are worn
-
-                </label>
-
-
-                <label class="check-item">
-
-                    <input
-                        type="checkbox"
-                        id="hair"
-                        checked
-                    >
-
-                    Hair is properly groomed
-
-                </label>
-
-
-                <label class="check-item">
-
-                    <input
-                        type="checkbox"
-                        id="beard"
-                        checked
-                    >
-
-                    Beard is properly groomed
-
-                </label>
-
-            </div>
-
-
-            <!-- ============================= -->
-            <!-- BUTTONS -->
-            <!-- ============================= -->
-
-            <div class="button-group">
-
-                <form
-                    action="/result"
-                    method="GET"
-                    onsubmit="prepareChecklist()"
-                >
-
-                    <input
-                        type="hidden"
-                        name="shirt_tucked"
-                        id="shirt_value"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="formal_trousers"
-                        id="trousers_value"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="formal_shoes"
-                        id="shoes_value"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="hair_ok"
-                        id="hair_value"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="beard_ok"
-                        id="beard_value"
-                    >
-
-
-                    <button type="submit">
-                        Check Compliance
-                    </button>
-
-                </form>
-
-
-                <a href="/">
-
-                    <button type="button">
-                        Back to Home
-                    </button>
-
-                </a>
-
-            </div>
-
         </div>
+    </header>
 
+    <div class="detect-hero">
+        <h1>Verify your <span style="color: var(--blue-bright);">ID card.</span></h1>
+        <p>Check the live camera feed for student ID-card detection. Once recognized, compliance status locks in until you reset or step away.</p>
     </div>
 
+    <main class="detection-layout">
+        
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">Live Camera Feed</h2>
+                    <p class="panel-subtitle">AI-assisted visual recognition stream</p>
+                </div>
+                <div class="live-badge">
+                    <span class="live-dot"></span> LIVE SCAN
+                </div>
+            </div>
 
-    <!-- ============================= -->
-    <!-- JAVASCRIPT -->
-    <!-- ============================= -->
+            <div class="video-container">
+                <img src="{{ url_for('video') }}" class="video-feed" alt="Live AI Stream">
+                <div class="scan-overlay">
+                    <div class="laser-beam"></div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 0.78rem; color: var(--muted);">
+                <span>Camera Status: <strong style="color: var(--success);">Online</strong></span>
+                <span style="color: var(--cyan); font-weight: 600;">Position ID Card Clearly</span>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">Verification Report</h2>
+                    <p class="panel-subtitle">Real-time status tracking</p>
+                </div>
+            </div>
+
+            <div class="report-box" id="reportBox">
+                <div class="report-status" id="reportStatus">Initializing Scanner...</div>
+                <p class="report-desc" id="reportDesc">Waiting for camera feed stabilization and compliance check.</p>
+            </div>
+
+            <div class="rules-section-title">Compliance Rules</div>
+            <div class="rules-list">
+                <div class="rule-item">
+                    <span>Student ID Card Detection</span>
+                    <span class="rule-badge pending" id="ruleBadge">Scanning...</span>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                <button class="btn btn-outline" style="flex: 1;" onclick="window.location.reload()">
+                    Reset / Refresh
+                </button>
+            </div>
+
+            <div class="info-note">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <span>Once an ID card is successfully detected, it remains verified until you click reset or leave the camera zone.</span>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-main">
+                <a href="/" class="footer-brand" aria-label="IDentrix home">
+                    <img src="{{ url_for('static', filename='identrix-logo.svg') }}" alt="">
+                    <div>
+                        <strong>IDentrix</strong>
+                        <span>Campus identity intelligence</span>
+                    </div>
+                </a>
+
+                <nav class="footer-links" aria-label="Footer navigation">
+                    <a href="{{ url_for('home') }}">Home</a>
+                    <a href="{{ url_for('detect') }}">Detection</a>
+                    <a href="{{ url_for('admin_login') }}">Admin</a>
+                </nav>
+            </div>
+
+            <div class="footer-bottom">
+                <p>© <span id="currentYear">2026</span> IDentrix. Student ID-card detection and result review.</p>
+                <p>Designed for <span>smarter campus workflows.</span></p>
+            </div>
+        </div>
+    </footer>
 
     <script>
+        document.getElementById("currentYear").textContent = new Date().getFullYear();
 
-        function prepareChecklist() {
+        setInterval(async () => {
+            try {
+                let response = await fetch('/api/status');
+                let data = await response.json();
+                
+                let box = document.getElementById('reportBox');
+                let status = document.getElementById('reportStatus');
+                let desc = document.getElementById('reportDesc');
+                let badge = document.getElementById('ruleBadge');
 
-            document.getElementById("shirt_value").value =
-                document.getElementById("shirt").checked;
-
-            document.getElementById("trousers_value").value =
-                document.getElementById("trousers").checked;
-
-            document.getElementById("shoes_value").value =
-                document.getElementById("shoes").checked;
-
-            document.getElementById("hair_value").value =
-                document.getElementById("hair").checked;
-
-            document.getElementById("beard_value").value =
-                document.getElementById("beard").checked;
-
-        }
-
+                if (data.result === 'PASS') {
+                    box.style.borderColor = 'rgba(105, 213, 160, 0.4)';
+                    box.style.background = 'rgba(105, 213, 160, 0.05)';
+                    status.style.color = 'var(--success)';
+                    status.innerText = 'ID Card Verified';
+                    desc.innerText = data.message;
+                    badge.className = 'rule-badge ok';
+                    badge.innerText = data.badge_text;
+                } else if (data.result === 'VERIFYING') {
+                    box.style.borderColor = 'var(--border-bright)';
+                    box.style.background = 'rgba(10, 18, 32, 0.65)';
+                    status.style.color = 'var(--blue-bright)';
+                    status.innerText = 'Verifying ID Card';
+                    desc.innerText = data.message;
+                    badge.className = data.badge_class;
+                    badge.innerText = data.badge_text;
+                } else if (data.result === 'VIOLATION') {
+                    box.style.borderColor = 'rgba(255, 119, 139, 0.4)';
+                    box.style.background = 'rgba(255, 119, 139, 0.05)';
+                    status.style.color = 'var(--danger)';
+                    status.innerText = 'Violation Logged';
+                    desc.innerText = data.message;
+                    badge.className = data.badge_class;
+                    badge.innerText = data.badge_text;
+                } else {
+                    box.style.borderColor = 'var(--border)';
+                    box.style.background = 'rgba(10, 18, 32, 0.65)';
+                    status.style.color = 'var(--muted)';
+                    status.innerText = 'Waiting for Person';
+                    desc.innerText = data.message;
+                    badge.className = 'rule-badge pending';
+                    badge.innerText = data.badge_text;
+                }
+            } catch (err) {
+                console.error("Status fetch error:", err);
+            }
+        }, 1000);
     </script>
-
 </body>
-
 </html>
-```
