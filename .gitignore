@@ -12,3 +12,15 @@ runs/
 
 !idcard_v2.pt
 !yolo11n.pt
+
+# Local database and training data
+*.db
+dataset/
+
+# Local violation evidence
+static/violations/
+violations/
+
+# Local development test scripts
+camera_test.py
+test_camera.py
