@@ -4,6 +4,7 @@ import cv2
 import threading
 import time
 import csv
+import os
 from flask import make_response
 
 from compliance import check_compliance
@@ -37,10 +38,53 @@ person_model = YOLO("yolo11n.pt")
 # CAMERA
 # =====================================================
 
-camera = cv2.VideoCapture(1, cv2.CAP_DSHOW)
-camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+def create_camera():
+    """Open the first webcam source that produces a valid frame."""
+    preferred_indexes = []
+
+    env_index = os.getenv("IDENTRIX_CAMERA_INDEX")
+    if env_index:
+        try:
+            preferred_indexes.append(int(env_index))
+        except ValueError as exc:
+            raise ValueError("IDENTRIX_CAMERA_INDEX must be an integer.") from exc
+
+    preferred_indexes.extend([0, 1, 2, 3])
+    backends = (
+        ("DirectShow", cv2.CAP_DSHOW),
+        ("Media Foundation", cv2.CAP_MSMF),
+        ("default", cv2.CAP_ANY),
+    )
+
+    seen = set()
+    for index in preferred_indexes:
+        if index in seen:
+            continue
+        seen.add(index)
+
+        for backend_name, backend in backends:
+            cap = cv2.VideoCapture(index, backend)
+            if not cap.isOpened():
+                cap.release()
+                continue
+
+            success, frame = cap.read()
+            if not success or frame is None or frame.size == 0:
+                cap.release()
+                continue
+
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            print(f"Using camera index {index} with {backend_name}.")
+            return cap
+
+    return None
+
+
+camera = create_camera()
+if camera is None:
+    print("⚠️ No webcam detected. The detection page will show a black feed until a camera is connected.")
 
 
 # =====================================================
@@ -89,17 +133,25 @@ logged_person_violations = set()
 # =====================================================
 
 def camera_thread():
-    global latest_frame
+    global latest_frame, camera
 
     while True:
+        if camera is None or not camera.isOpened():
+            camera = create_camera()
+            if camera is None:
+                time.sleep(0.2)
+                continue
+
         success, frame = camera.read()
 
         if success:
             with frame_lock:
                 latest_frame = frame
         else:
-            print("Camera read failed")
-            time.sleep(0.05)
+            print("Camera read failed; retrying with a different capture source...")
+            camera.release()
+            camera = None
+            time.sleep(0.2)
 
 
 # =====================================================
