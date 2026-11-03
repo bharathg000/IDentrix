@@ -1,8 +1,14 @@
 import sqlite3
+import os
 from datetime import datetime
 
 
-DATABASE = "campus_appearance.db"
+DATA_DIR = os.path.abspath(os.getenv(
+    "IDENTRIX_DATA_DIR",
+    os.path.dirname(os.path.abspath(__file__))
+))
+os.makedirs(DATA_DIR, exist_ok=True)
+DATABASE = os.path.join(DATA_DIR, "campus_appearance.db")
 
 
 def get_connection():
@@ -13,6 +19,15 @@ def get_connection():
 
 def init_database():
     conn = get_connection()
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS people (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            person_code TEXT NOT NULL UNIQUE,
+            display_name TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS violations (
@@ -189,5 +204,21 @@ def get_filtered_violations(filter_date="", sort_order="latest", person_id=""):
             query += " ORDER BY v.last_detected DESC, v.id DESC"
 
         return conn.execute(query, params).fetchall()
+    finally:
+        conn.close()
+
+
+def delete_all_violations():
+    conn = get_connection()
+    try:
+        screenshot_paths = [
+            row["screenshot_path"]
+            for row in conn.execute(
+                "SELECT screenshot_path FROM violations WHERE screenshot_path IS NOT NULL"
+            ).fetchall()
+        ]
+        conn.execute("DELETE FROM violations")
+        conn.commit()
+        return screenshot_paths
     finally:
         conn.close()

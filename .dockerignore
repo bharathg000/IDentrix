@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+venv/
+__pycache__/
+*.pyc
+*.db
+dataset/
+runs/
+static/violations/
+violations/
+*.pth
+appearance_yolo11n.pt

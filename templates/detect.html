@@ -110,6 +110,9 @@
             position: relative; width: 100%; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-bright); background: #000;
         }
         .video-feed { width: 100%; display: block; aspect-ratio: 4/3; object-fit: cover; }
+        .camera-capture { display: none; }
+        .camera-controls { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+        .camera-status { min-height: 1.4em; color: var(--text-soft); font-size: 0.82rem; }
 
         .scan-overlay {
             position: absolute; inset: 0; pointer-events: none; border: 2px solid rgba(99, 168, 255, 0.2); border-radius: var(--radius-md);
@@ -212,6 +215,22 @@
             .footer-main { flex-direction: column; align-items: flex-start; }
             .footer-bottom { flex-direction: column; align-items: flex-start; gap: 7px; }
         }
+        @media(max-width: 600px) {
+            .container { width: min(100% - 28px, 1160px); }
+            .nav-inner { min-height: 68px; gap: 10px; flex-wrap: wrap; padding-block: 10px; }
+            .brand-logo { width: 36px; height: 36px; }
+            .brand-name { font-size: 1.25rem; }
+            .brand-caption { font-size: 0.48rem; }
+            .nav-center { order: 3; width: 100%; justify-content: center; padding-bottom: 4px; }
+            .nav-right .btn { min-height: 38px; padding: 8px 11px; font-size: 0.75rem; }
+            .detect-hero { padding: 28px 16px 10px; }
+            .detection-layout { padding: 0 14px; gap: 14px; margin-top: 14px; }
+            .panel { padding: 18px 14px; border-radius: 18px; }
+            .panel-header { gap: 10px; }
+            .video-feed { aspect-ratio: 3/4; object-fit: contain; }
+            .report-box { padding: 18px 12px; }
+            .footer-links { flex-wrap: wrap; gap: 14px; }
+        }
     </style>
 </head>
 <body>
@@ -256,16 +275,29 @@
             </div>
 
             <div class="video-container">
-                <img src="{{ url_for('video') }}" class="video-feed" alt="Live AI Stream">
+                <img id="videoFeed" class="video-feed" alt="AI-processed camera feed">
+                <video id="cameraCapture" class="camera-capture" autoplay muted playsinline></video>
+                <canvas id="frameCanvas" class="camera-capture"></canvas>
                 <div class="scan-overlay">
                     <div class="laser-beam"></div>
                 </div>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 0.78rem; color: var(--muted);">
-                <span>Camera Status: <strong style="color: var(--success);">Online</strong></span>
+                <span>Camera Status: <strong id="cameraStatusLabel" style="color: var(--text-soft);">Not started</strong></span>
                 <span style="color: var(--cyan); font-weight: 600;">Position ID Card Clearly</span>
             </div>
+            <div class="camera-controls">
+                <button class="btn" id="startCameraButton" type="button">Start camera</button>
+                <button class="btn btn-outline" id="stopCameraButton" type="button" disabled>Stop camera</button>
+            </div>
+            <label class="camera-status" style="display: flex; align-items: flex-start; gap: 9px; margin-top: 14px;">
+                <input id="cameraConsent" type="checkbox" style="margin-top: 4px; accent-color: var(--blue);">
+                <span>I understand camera frames are sent to the server for ID-card detection and violation snapshots may be stored for administrator review.</span>
+            </label>
+            <p class="camera-status" id="cameraMessage" role="status" aria-live="polite">
+                Select the notice before starting. Hosted camera access requires HTTPS.
+            </p>
         </section>
 
         <section class="panel">
@@ -336,9 +368,141 @@
     <script>
         document.getElementById("currentYear").textContent = new Date().getFullYear();
 
+        const cameraToken = {{ camera_token | tojson }};
+        const serverCameraEnabled = {{ server_camera_enabled | tojson }};
+        const cameraCapture = document.getElementById("cameraCapture");
+        const frameCanvas = document.getElementById("frameCanvas");
+        const videoFeed = document.getElementById("videoFeed");
+        const startCameraButton = document.getElementById("startCameraButton");
+        const stopCameraButton = document.getElementById("stopCameraButton");
+        const cameraMessage = document.getElementById("cameraMessage");
+        const cameraStatusLabel = document.getElementById("cameraStatusLabel");
+        const cameraConsent = document.getElementById("cameraConsent");
+        let cameraStream = null;
+        let frameTimer = null;
+        let sendingFrame = false;
+        let cameraRunning = false;
+
+        async function cameraRequest(path, body) {
+            const response = await fetch(path, {
+                method: "POST",
+                headers: { "X-Camera-Token": cameraToken },
+                body
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "Camera request failed.");
+            return result;
+        }
+
+        async function sendFrame() {
+            if (!cameraRunning || sendingFrame || cameraCapture.readyState < 2) return;
+            sendingFrame = true;
+            try {
+                const scale = Math.min(1, 640 / cameraCapture.videoWidth, 480 / cameraCapture.videoHeight);
+                frameCanvas.width = Math.round(cameraCapture.videoWidth * scale);
+                frameCanvas.height = Math.round(cameraCapture.videoHeight * scale);
+                frameCanvas.getContext("2d").drawImage(cameraCapture, 0, 0, frameCanvas.width, frameCanvas.height);
+                const blob = await new Promise(resolve => frameCanvas.toBlob(resolve, "image/jpeg", 0.75));
+                if (!blob) throw new Error("Could not capture a camera frame.");
+                await cameraRequest("/api/frame", blob);
+            } catch (error) {
+                cameraMessage.textContent = error.message;
+                await stopCamera();
+                return;
+            } finally {
+                sendingFrame = false;
+            }
+            if (cameraRunning) frameTimer = window.setTimeout(sendFrame, 500);
+        }
+
+        async function startCamera() {
+            if (!cameraConsent.checked) {
+                cameraMessage.textContent = "Please confirm the camera and data-use notice before starting.";
+                return;
+            }
+            startCameraButton.disabled = true;
+            cameraMessage.textContent = "Connecting to camera...";
+            try {
+                await cameraRequest("/api/camera/start");
+                if (!serverCameraEnabled) {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error("Camera access is unavailable in this browser. Use a current browser over HTTPS.");
+                    }
+                    cameraStream = await navigator.mediaDevices.getUserMedia({
+                        audio: false,
+                        video: {
+                            facingMode: { ideal: "environment" },
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        }
+                    });
+                    cameraCapture.srcObject = cameraStream;
+                    await cameraCapture.play();
+                }
+
+                cameraRunning = true;
+                videoFeed.src = "{{ url_for('video') }}";
+                cameraStatusLabel.textContent = "Online";
+                cameraStatusLabel.style.color = "var(--success)";
+                cameraMessage.textContent = serverCameraEnabled
+                    ? "Connected to the server camera."
+                    : "Camera is active. Frames are sent for ID-card detection.";
+                stopCameraButton.disabled = false;
+                if (!serverCameraEnabled) sendFrame();
+            } catch (error) {
+                cameraMessage.textContent = error.name === "NotAllowedError"
+                    ? "Camera permission was denied. Allow camera access in your browser and try again."
+                    : error.message;
+                await stopCamera();
+            } finally {
+                startCameraButton.disabled = cameraRunning;
+            }
+        }
+
+        async function stopCamera() {
+            cameraRunning = false;
+            window.clearTimeout(frameTimer);
+            frameTimer = null;
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            cameraCapture.srcObject = null;
+            videoFeed.removeAttribute("src");
+            videoFeed.removeAttribute("srcset");
+            startCameraButton.disabled = false;
+            stopCameraButton.disabled = true;
+            cameraStatusLabel.textContent = "Stopped";
+            cameraStatusLabel.style.color = "var(--text-soft)";
+            try {
+                await cameraRequest("/api/camera/stop");
+            } catch (error) {
+                cameraMessage.textContent = error.message;
+            }
+        }
+
+        startCameraButton.addEventListener("click", startCamera);
+        stopCameraButton.addEventListener("click", stopCamera);
+        cameraConsent.addEventListener("change", () => {
+            if (cameraConsent.checked) {
+                cameraMessage.textContent = "Camera permission is requested only after you start the scan.";
+            }
+        });
+        window.addEventListener("pagehide", () => {
+            if (cameraRunning) {
+                fetch("/api/camera/stop", {
+                    method: "POST",
+                    headers: { "X-Camera-Token": cameraToken },
+                    keepalive: true
+                });
+            }
+            if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+        });
+
         setInterval(async () => {
             try {
                 let response = await fetch('/api/status');
+                if (!response.ok) throw new Error("Could not retrieve detection status.");
                 let data = await response.json();
                 
                 let box = document.getElementById('reportBox');

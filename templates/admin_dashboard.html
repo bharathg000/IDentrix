@@ -270,6 +270,9 @@
             .sidebar { width: var(--sidebar-collapsed); padding: 20px 8px; }
             .sidebar.expanded { width: var(--sidebar-width); }
             .stats { grid-template-columns: 1fr; }
+            .section-header { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+            .section-header form { width: 100%; }
+            .section-header form button { width: 100%; min-height: 42px; }
         }
     </style>
 </head>
@@ -429,16 +432,22 @@
                 <div class="section">
                     <div class="section-header">
                         <h2>Violation Entries</h2>
+                        <form method="POST" action="{{ url_for('delete_all_dashboard_violations') }}"
+                              onsubmit="return confirm('This permanently deletes every violation record and its saved snapshots, including records hidden by your current filters. Continue?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" class="btn-action btn-delete">
+                                Delete all violation records
+                            </button>
+                        </form>
                     </div>
 
                     <div class="entries-list" id="dashboardEntriesList">
                         {% if today_violations %}
                             {% for v in today_violations %}
-                                {% set img_url = v.screenshot_path | replace('static/', '') if v.screenshot_path else '' %}
-                                {% set full_img_url = url_for('static', filename=img_url) if img_url else '' %}
+                                {% set full_img_url = url_for('violation_screenshot', filename=v.screenshot_path) if v.screenshot_path else '' %}
                                 <div class="entry-row" data-search="person {{ v.person_id }} {{ v.violation_type|lower }}" data-personid="{{ v.person_id }}">
                                     <div class="entry-info">
-                                        {% if img_url %}
+                                        {% if full_img_url %}
                                             <img src="{{ full_img_url }}" class="entry-thumb" alt="Violation snapshot">
                                         {% else %}
                                             <div class="entry-thumb" style="display: grid; place-items: center; color: var(--muted); font-size: 0.7rem;">No Img</div>
@@ -567,6 +576,10 @@
                 document.getElementById('tab-settings').style.display = 'block';
             }
             if(el) el.classList.add('active');
+        }
+
+        if (window.location.hash === '#history') {
+            switchTab('history', document.querySelector('.sidebar .nav-item:nth-of-type(2)'));
         }
 
         // Notification Dropdown Toggle

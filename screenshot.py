@@ -3,6 +3,13 @@ import os
 from datetime import datetime
 
 
+DATA_DIR = os.path.abspath(os.getenv(
+    "IDENTRIX_DATA_DIR",
+    os.path.dirname(os.path.abspath(__file__))
+))
+EVIDENCE_DIR = os.path.join(DATA_DIR, "violations")
+
+
 def save_violation_screenshot(
     frame,
     person,
@@ -12,13 +19,12 @@ def save_violation_screenshot(
     """
     Save one screenshot for a person's violation.
 
-    Folder structure:
+    Evidence is written outside Flask's public static directory.
 
-    static/
-        violations/
-            person_1/
-                2026-10-07/
-                    ID_Card.jpg
+    violations/
+        person_1/
+            2026-10-07/
+                ID_Card.jpg
     """
 
     date = datetime.now().strftime("%Y-%m-%d")
@@ -30,8 +36,7 @@ def save_violation_screenshot(
     )
 
     folder = os.path.join(
-        "static",
-        "violations",
+        EVIDENCE_DIR,
         f"person_{person_id}",
         date
     )
@@ -105,9 +110,6 @@ def save_violation_screenshot(
     # Store path using forward slashes
     # so Flask can serve it correctly.
 
-    relative_path = full_path.replace(
-        "\\",
-        "/"
-    )
+    relative_path = os.path.relpath(full_path, DATA_DIR).replace("\\", "/")
 
     return relative_path

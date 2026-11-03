@@ -1,10 +1,13 @@
-from flask import Flask, render_template, Response, request, redirect, session
+from flask import Flask, render_template, Response, request, redirect, session, send_from_directory, abort
 from ultralytics import YOLO
 import cv2
 import threading
 import time
 import csv
 import os
+import hmac
+import secrets
+import numpy as np
 from flask import make_response
 
 from compliance import check_compliance
@@ -13,14 +16,32 @@ from database import (
     get_all_people,
     get_today,
     get_filtered_violations,
-    update_screenshot
+    update_screenshot,
+    delete_all_violations
 )
 from violation_engine import process_violation
 from screenshot import save_violation_screenshot
 
 
 app = Flask(__name__)
-app.secret_key = "campusappearanceai-secret-key"
+app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+    MAX_CONTENT_LENGTH=1024 * 1024,
+)
+
+if not os.getenv("FLASK_SECRET_KEY"):
+    app.logger.warning("FLASK_SECRET_KEY is unset; sessions will not survive restarts.")
+
+DATA_DIR = os.path.abspath(os.getenv(
+    "IDENTRIX_DATA_DIR",
+    os.path.dirname(os.path.abspath(__file__))
+))
+EVIDENCE_DIR = os.path.join(DATA_DIR, "violations")
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
 
 # Initialize SQLite database
 init_database()
@@ -82,9 +103,8 @@ def create_camera():
     return None
 
 
-camera = create_camera()
-if camera is None:
-    print("⚠️ No webcam detected. The detection page will show a black feed until a camera is connected.")
+SERVER_CAMERA_ENABLED = os.getenv("IDENTRIX_SERVER_CAMERA", "false").lower() == "true"
+camera = create_camera() if SERVER_CAMERA_ENABLED else None
 
 
 # =====================================================
@@ -96,10 +116,13 @@ latest_id_boxes = []
 latest_person_boxes = []
 latest_id_card = False
 frame_lock = threading.Lock()
+latest_frame_time = 0
 
 # Flag to track if the detect page / video stream is active
 is_streaming = False
 stream_lock = threading.Lock()
+active_camera_token = None
+active_camera_last_seen = 0
 
 
 # =====================================================
@@ -133,9 +156,13 @@ logged_person_violations = set()
 # =====================================================
 
 def camera_thread():
-    global latest_frame, camera
+    global latest_frame, latest_frame_time, active_camera_last_seen, camera
 
     while True:
+        if not SERVER_CAMERA_ENABLED:
+            time.sleep(1)
+            continue
+
         if camera is None or not camera.isOpened():
             camera = create_camera()
             if camera is None:
@@ -147,6 +174,10 @@ def camera_thread():
         if success:
             with frame_lock:
                 latest_frame = frame
+                latest_frame_time = time.time()
+            with stream_lock:
+                if active_camera_token:
+                    active_camera_last_seen = time.time()
         else:
             print("Camera read failed; retrying with a different capture source...")
             camera.release()
@@ -243,7 +274,13 @@ def ai_thread():
         with stream_lock:
             active = is_streaming
 
-        if not active:
+        with frame_lock:
+            frame_is_fresh = (
+                latest_frame is not None
+                and time.time() - latest_frame_time <= 2
+            )
+
+        if not active or not frame_is_fresh:
             time.sleep(0.5)
             continue
 
@@ -384,8 +421,10 @@ def ai_thread():
 # START THREADS
 # =====================================================
 
-camera_worker = threading.Thread(target=camera_thread, daemon=True)
-camera_worker.start()
+camera_worker = None
+if SERVER_CAMERA_ENABLED:
+    camera_worker = threading.Thread(target=camera_thread, daemon=True)
+    camera_worker.start()
 
 ai_worker = threading.Thread(target=ai_thread, daemon=True)
 ai_worker.start()
@@ -400,18 +439,145 @@ def home():
     return render_template("index.html")
 
 
+@app.route("/healthz")
+def health_check():
+    return {"status": "ok"}
+
+
 @app.route("/detect")
 def detect():
-    return render_template("detect.html")
+    camera_token = session.setdefault("camera_token", secrets.token_urlsafe(32))
+    return render_template(
+        "detect.html",
+        camera_token=camera_token,
+        server_camera_enabled=SERVER_CAMERA_ENABLED
+    )
+
+
+def valid_camera_token():
+    expected = session.get("camera_token", "")
+    supplied = request.headers.get("X-Camera-Token", "")
+    return bool(expected and supplied and hmac.compare_digest(expected, supplied))
+
+
+@app.route("/api/camera/start", methods=["POST"])
+def start_camera_session():
+    global active_camera_token, active_camera_last_seen, is_streaming
+    global latest_frame, latest_frame_time, latest_person_boxes, latest_id_boxes
+    global latest_id_card, last_id_seen_time, logged_person_violations
+
+    if not valid_camera_token():
+        return {"error": "Refresh the page before starting the camera."}, 403
+
+    token = session["camera_token"]
+    now = time.time()
+    with stream_lock:
+        if (
+            active_camera_token
+            and active_camera_token != token
+            and now - active_camera_last_seen < 15
+        ):
+            return {"error": "Another camera session is active. Try again shortly."}, 409
+
+        if active_camera_token != token:
+            with frame_lock:
+                latest_person_boxes = []
+                latest_id_boxes = []
+                latest_id_card = False
+                last_id_seen_time = 0
+                logged_person_violations = set()
+                if not SERVER_CAMERA_ENABLED:
+                    latest_frame = None
+                    latest_frame_time = 0
+
+        active_camera_token = token
+        active_camera_last_seen = now
+        is_streaming = True
+
+    return {"ok": True}
+
+
+@app.route("/api/frame", methods=["POST"])
+def receive_camera_frame():
+    global latest_frame, latest_frame_time, active_camera_last_seen, is_streaming
+
+    if not valid_camera_token():
+        return {"error": "Camera session expired. Refresh the page and try again."}, 403
+
+    token = session["camera_token"]
+    with stream_lock:
+        if active_camera_token != token:
+            return {"error": "Start the camera before sending frames."}, 409
+
+    if request.mimetype != "image/jpeg" or not request.data:
+        return {"error": "Expected a non-empty JPEG frame."}, 400
+
+    encoded = np.frombuffer(request.data, dtype=np.uint8)
+    frame = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+    if frame is None:
+        return {"error": "The uploaded camera frame could not be decoded."}, 400
+
+    height, width = frame.shape[:2]
+    if width > 1280 or height > 960:
+        scale = min(1280 / width, 960 / height)
+        frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
+
+    with frame_lock:
+        latest_frame = frame
+        latest_frame_time = time.time()
+    with stream_lock:
+        active_camera_last_seen = time.time()
+        is_streaming = True
+
+    return {"ok": True}
+
+
+@app.route("/api/camera/stop", methods=["POST"])
+def stop_camera_session():
+    global active_camera_token, active_camera_last_seen, is_streaming
+    global latest_frame, latest_frame_time, latest_person_boxes, latest_id_boxes, latest_id_card
+
+    if not valid_camera_token():
+        return {"error": "Invalid camera session."}, 403
+
+    with stream_lock:
+        if active_camera_token == session["camera_token"]:
+            active_camera_token = None
+            active_camera_last_seen = 0
+            is_streaming = False
+            with frame_lock:
+                latest_person_boxes = []
+                latest_id_boxes = []
+                latest_id_card = False
+                if not SERVER_CAMERA_ENABLED:
+                    latest_frame = None
+                    latest_frame_time = 0
+
+    return {"ok": True}
 
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        expected_username = os.getenv("ADMIN_USERNAME")
+        expected_password = os.getenv("ADMIN_PASSWORD")
 
-        if username == "admin" and password == "admin123":
+        if not expected_username or not expected_password:
+            return render_template(
+                "admin_login.html",
+                error="Admin login is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD."
+            ), 503
+
+        if (
+            hmac.compare_digest(username, expected_username)
+            and hmac.compare_digest(password, expected_password)
+        ):
+            camera_token = session.get("camera_token")
+            session.clear()
+            if camera_token:
+                session["camera_token"] = camera_token
             session["admin_logged_in"] = True
             return redirect("/admin/dashboard")
 
@@ -445,21 +611,63 @@ def admin_dashboard():
         today_violations=today_violations,
         filter_date=filter_date,
         sort_order=sort_order,
-        person_id_filter=person_id_filter
+        person_id_filter=person_id_filter,
+        csrf_token=session.setdefault("csrf_token", secrets.token_urlsafe(32))
     )
 @app.route("/admin/history")
 def admin_history():
-    filter_date = request.args.get("date", "")
-    person_id = request.args.get("person_id", "")
-    sort_order = request.args.get("sort", "latest")
-    
-    violations = get_filtered_violations(filter_date=filter_date, sort_order=sort_order, person_id=person_id)
-    return render_template("admin_violation_history.html", violations=violations, filter_date=filter_date, person_id=person_id)
+    if not session.get("admin_logged_in"):
+        return redirect("/admin/login")
+
+    return redirect("/admin/dashboard#history")
 
 @app.route("/admin/logout")
 def admin_logout():
     session.pop("admin_logged_in", None)
     return redirect("/")
+
+
+@app.route("/admin/violations/delete-all", methods=["POST"])
+def delete_all_dashboard_violations():
+    if not session.get("admin_logged_in"):
+        return redirect("/admin/login")
+
+    expected_token = session.get("csrf_token", "")
+    supplied_token = request.form.get("csrf_token", "")
+    if not expected_token or not hmac.compare_digest(expected_token, supplied_token):
+        abort(400)
+
+    screenshot_paths = delete_all_violations()
+    evidence_roots = (
+        os.path.realpath(EVIDENCE_DIR),
+        os.path.realpath(os.path.join(app.static_folder, "violations")),
+    )
+    for screenshot_path in screenshot_paths:
+        normalized_path = screenshot_path.replace("\\", "/")
+        if normalized_path.startswith("static/violations/"):
+            root = evidence_roots[1]
+            relative_path = normalized_path[len("static/violations/"):]
+        else:
+            root = evidence_roots[0]
+            if normalized_path.startswith("violations/"):
+                normalized_path = normalized_path[len("violations/"):]
+            relative_path = normalized_path
+
+        full_path = os.path.realpath(os.path.join(root, relative_path))
+        try:
+            is_within_root = os.path.commonpath((root, full_path)) == root
+        except ValueError:
+            is_within_root = False
+        if not is_within_root:
+            app.logger.error("Skipped unsafe violation screenshot path: %s", screenshot_path)
+            continue
+        try:
+            if os.path.isfile(full_path):
+                os.remove(full_path)
+        except OSError:
+            app.logger.exception("Could not remove violation screenshot: %s", full_path)
+
+    return redirect("/admin/dashboard")
 
 
 @app.route("/admin/export/csv")
@@ -501,8 +709,41 @@ def export_csv():
     return response
 
 
+@app.route("/admin/screenshot/<path:filename>")
+def violation_screenshot(filename):
+    if not session.get("admin_logged_in"):
+        abort(403)
+
+    relative_path = filename.replace("\\", "/")
+    if relative_path.startswith("static/violations/"):
+        relative_path = relative_path[len("static/violations/"):]
+        directory = os.path.join(app.static_folder, "violations")
+    else:
+        if relative_path.startswith("violations/"):
+            relative_path = relative_path[len("violations/"):]
+        directory = EVIDENCE_DIR
+    return send_from_directory(directory, relative_path)
+
+
+@app.route("/static/violations/<path:filename>")
+def deny_public_violation_screenshot(filename):
+    abort(404)
+
+
 @app.route("/api/status")
 def api_status():
+    if (
+        session.get("camera_token") != active_camera_token
+        or time.time() - active_camera_last_seen > 2
+    ):
+        return {
+            "result": "NO_PERSON",
+            "message": "Start the camera to begin ID-card detection.",
+            "badge_text": "WAITING",
+            "badge_class": "rule-badge pending",
+            "people": []
+        }
+
     with frame_lock:
         people = [dict(p) for p in latest_person_boxes]
 
@@ -581,14 +822,15 @@ def api_status():
 # VIDEO STREAM
 # =====================================================
 
-def generate_frames():
+def generate_frames(camera_token):
     global is_streaming, latest_person_boxes, latest_id_boxes
-    
-    with stream_lock:
-        is_streaming = True
 
     try:
         while True:
+            with stream_lock:
+                if active_camera_token != camera_token:
+                    break
+
             with frame_lock:
                 if latest_frame is None:
                     time.sleep(0.01)
@@ -655,22 +897,26 @@ def generate_frames():
             time.sleep(0.01)
     finally:
         with stream_lock:
-            is_streaming = False
-            with frame_lock:
-                latest_person_boxes = []
-                latest_id_boxes = []
+            if not SERVER_CAMERA_ENABLED and time.time() - active_camera_last_seen >= 15:
+                is_streaming = False
 
 
 @app.route("/video")
 def video():
+    camera_token = session.get("camera_token")
+    if not camera_token or camera_token != active_camera_token:
+        abort(403)
     return Response(
-        generate_frames(),
+        generate_frames(camera_token),
         mimetype="multipart/x-mixed-replace; boundary=frame"
     )
 
 
 @app.route("/result")
 def result():
+    if session.get("camera_token") != active_camera_token:
+        abort(403)
+
     id_card = latest_id_card
 
     result_status, rules, issues = check_compliance(
